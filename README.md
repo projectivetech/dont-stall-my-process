@@ -50,6 +50,7 @@ DontStallMyProcess.configure do |config|
   config.sigkill_only = false
   config.close_stdio = true
   config.restore_all_traps = false
+  config.process_pool_size = 10
   config.subprocess_name = 'DontStallMyProcess'
   config.after_fork do |pid|
     <...>
@@ -63,6 +64,8 @@ the `TERM` signal to do some shutdown logic on their own. `sigkill_only` default
 The `close_stdio` flag causes the subprocess to close `$stdout` and `$stderr` after the fork. Defaults to `true`.
 
 When the `restore_all_traps` flag is set, all signal handlers will be reset to the Ruby default signal handlers. See documentation on Ruby `Signal` module for more information.
+
+When `process_pool_size` is set to a value > 0, that number of processes will be kept alive and be re-used when all their DRb services have been terminated (i.e. all local proxies have been garbage-collected). Defaults to `nil` (same as zero) which turns off process pooling.
 
 The `subprocess_name` string is the name of the subprocess. Defaults to `nil` which means the subprocess is
  not renamed at all, but instead keeps the name of the parent process.

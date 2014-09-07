@@ -36,12 +36,26 @@ module DontStallMyProcess
         r.close
       end
 
-      def start_service(klass, opts)
-        @controller.start_service(klass, opts)
+      def local_proxy_instantiated(uri)
+        @proxies ||= []
+        @proxies << uri
       end
 
-      def stop_process
-        @controller.stop_process
+      def local_proxy_finalized(uri)
+        @proxies.delete(uri)
+        ChildProcessPool.free(self) if @proxies.empty?
+      end
+
+      def start_service(klass, opts)
+        uri = @controller.start_service(klass, opts)
+        
+        # Create the main proxy class.
+        Local::LocalProxy.new(uri, self, opts)
+      end
+
+      def quit
+        @controller.stop_application
+        @controller = nil
       end
 
       def terminate

@@ -9,18 +9,23 @@ module DontStallMyProcess
     # Furthermore, it takes care of automatically ending the remote DRb
     # service when the proxy object gets garbage-collected.
     class LocalProxy
-      def self.register_remote_proxy(proxy_uri, proxy)
+      def self.register_remote_proxy(process, proxy_uri, proxy)
+        process.local_proxy_instantiated(proxy_uri)
+
         @proxies ||= {}
         @proxies[proxy_uri] = proxy
       end
 
       def self.stop_remote_proxy(proxy_uri)
-        @proxies[proxy_uri].stop! rescue nil
+        # We rescue the exception here in case the subprocess is already dead.
+        @proxies[proxy_uri].stop_service! rescue nil
+
+        process.local_proxy_finalized(proxy_uri)
       end
 
-      def self.stop_remote_proxy_proc(proxy_uri)
+      def self.stop_remote_proxy_proc(process, proxy_uri)
         # http://www.mikeperham.com/2010/02/24/the-trouble-with-ruby-finalizers/
-        proc { LocalProxy.stop_remote_proxy(proxy_uri) }
+        proc { LocalProxy.stop_remote_proxy(process, proxy_uri) }
       end
 
       def initialize(uri, process, opts)
@@ -31,8 +36,8 @@ module DontStallMyProcess
         @proxy       = DRbObject.new_with_uri(uri)
 
         # Stop the remote DRb service on GC.
-        LocalProxy.register_remote_proxy(uri, @proxy)
-        ObjectSpace.define_finalizer(self, self.class.stop_remote_proxy_proc(uri))
+        LocalProxy.register_remote_proxy(process, uri, @proxy)
+        ObjectSpace.define_finalizer(self, self.class.stop_remote_proxy_proc(process, uri))
       end
 
       def respond_to?(m, ia = false)

@@ -2,13 +2,14 @@ module DontStallMyProcess
   class Configuration
     DEFAULT_TIMEOUT = 300
 
-    ATTRIBUTES = [:sigkill_only, :close_stdio, :restore_all_traps, :subprocess_name, :after_fork_handler]
+    ATTRIBUTES = [:sigkill_only, :close_stdio, :restore_all_traps, :process_pool_size, :subprocess_name, :after_fork_handler]
     attr_writer *(ATTRIBUTES - [:after_fork_handler])
 
     def initialize
       @sigkill_only       = false
       @close_stdio        = true
       @restore_all_traps  = false
+      @process_pool_size  = nil
       @after_fork_handler = Proc.new {}
       @subprocess_name    = nil
     end
