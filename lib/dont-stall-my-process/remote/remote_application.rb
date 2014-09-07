@@ -23,9 +23,6 @@ module DontStallMyProcess
         # can go wrong).
         Configuration.after_fork_handler.call
 
-        # Initialize the DRbServiceRegistry, clearing its state.
-        DRbServiceRegistry.initialize!
-
         # Start our controller class, expose via DRb.
         controller = RemoteApplicationController.new(self)
 

@@ -17,11 +17,12 @@ module DontStallMyProcess
         @parent   = parent
         @children = {}
 
-        @uri      = DRbServiceRegistry.start_server!(self)
+        @uri      = "drbunix:///tmp/dsmp-#{SecureRandom.hex(8)}"
+        @server   = DRb.start_service(uri, instance)
       end
 
       def stop_service!
-        DRbServiceRegistry.stop_server!(@uri)
+        DRb.remove_service(@server)
         parent.__nested_proxy_stopped!(@uri) if parent
       end
 

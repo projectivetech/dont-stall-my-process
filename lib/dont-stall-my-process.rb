@@ -1,7 +1,6 @@
 require 'dont-stall-my-process/local/child_process'
 require 'dont-stall-my-process/local/child_process_pool'
 require 'dont-stall-my-process/local/local_proxy'
-require 'dont-stall-my-process/remote/drb_service_registry'
 require 'dont-stall-my-process/remote/remote_application'
 require 'dont-stall-my-process/remote/remote_application_controller'
 require 'dont-stall-my-process/remote/remote_proxy'
