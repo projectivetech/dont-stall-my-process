@@ -1,6 +1,8 @@
 require 'dont-stall-my-process/local/child_process'
 require 'dont-stall-my-process/local/local_proxy'
+require 'dont-stall-my-process/remote/drb_service_registry'
 require 'dont-stall-my-process/remote/remote_application'
+require 'dont-stall-my-process/remote/remote_application_controller'
 require 'dont-stall-my-process/remote/remote_proxy'
 require 'dont-stall-my-process/configuration'
 require 'dont-stall-my-process/version'
@@ -16,11 +18,20 @@ module DontStallMyProcess
     # Set default values and validate configuration.
     opts = sanitize_options(opts)
 
+    # Start a local DRbServer (unnamed?) for callbacks (blocks!).
+    # Each new DontStallMyProcess object will overwrite the main master DRbServer.
+    # This looks weird, but doesn't affect concurrent uses of multiple
+    # Watchdogs, I tested it. Trust me.
+    DRb.start_service
+
     # Fork the child process.
-    p = Local::ChildProcess.new(klass, opts)
+    process = Local::ChildProcess.new
+
+    # Start the DRb service for the main class, and return the proxy.
+    uri = process.start_service(klass, opts)
 
     # Return the main proxy class.
-    Local::MainLocalProxy.new(p, opts)
+    Local::LocalProxy.new(uri, process, opts)
   end
 
   def self.sanitize_options(opts, default_timeout = Configuration::DEFAULT_TIMEOUT)

@@ -11,13 +11,18 @@ module DontStallMyProcess
     class RemoteProxy
       attr_reader :uri
 
-      def initialize(opts, instance)
+      def initialize(opts, instance, parent = nil)
         @opts     = opts
         @object   = instance
+        @parent   = parent
         @children = {}
 
-        @uri      = "drbunix:///tmp/dsmp-#{SecureRandom.hex(8)}"
-        DRb.start_service(uri, self)
+        @uri      = DRbServiceRegistry.start_server!(self)
+      end
+
+      def stop_service!
+        DRbServiceRegistry.stop_server!(@uri)
+        parent.__nested_proxy_stopped!(@uri) if parent
       end
 
       def respond_to?(m, ia = false)
@@ -45,31 +50,16 @@ module DontStallMyProcess
           instance = @object.public_send(meth, *args, &block)
 
           # Start the proxy, convert the object 0into a DRb service.
-          @children[meth] = RemoteProxy.new(@opts[:methods][meth], instance).uri
+          @children[meth] = RemoteProxy.new(@opts[:methods][meth], instance, self).uri
         end
 
         # Return the DRb URI.
         @children[meth]
       end
-    end
 
-    # The MainRemoteProxy is the first DRb object to be created in
-    # the child process. In addition to the real class' methods it
-    # provides a 'stop!' method that brings down the child process
-    # gracefully.
-    class MainRemoteProxy < RemoteProxy
-      def initialize(mother, klass, opts)
-        @mother = mother
-
-        # Instantiate the main class now, initialize the base class with
-        # the new instance, create the DRb service.
-        super(opts, klass.new)
-      end
-
-      def stop!
-        @mother.stop!
+      def __nested_proxy_stopped(uri)
+        @children.delete_if { |_, child_uri| child_uri == uri }
       end
     end
-
   end
 end

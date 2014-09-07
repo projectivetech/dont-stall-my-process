@@ -4,11 +4,9 @@ module DontStallMyProcess
     # RemoteObject is the base 'application' class for the child process.
     # It starts the DRb service and goes to sleep.
     class RemoteApplication
-      def initialize(klass, opts, pipe)
+      def initialize(pipe)
         # Set subprocess name if requested.
-        if Configuration.subprocess_name
-          $0 = Configuration.subprocess_name % { klass: klass.name }
-        end
+        $0 = Configuration.subprocess_name if Configuration.subprocess_name
 
         # Do not write to stdout/stderr unless requested by the client.
         if Configuration.close_stdio
@@ -20,44 +18,37 @@ module DontStallMyProcess
         # can go wrong).
         Configuration.after_fork_handler.call
 
-        # Start the main DRb service.
-        proxy = MainRemoteProxy.new(self, klass, opts)
+        # Initialize the DRbServiceRegistry, clearing its state.
+        DRbServiceRegistry.initialize!
+
+        # Start our controller class, expose via DRb.
+        controller = RemoteApplicationController.new(self)
 
         # Everything went fine, set up the main process synchronization now.
         @m = Mutex.new
         @c = ConditionVariable.new
 
         # Tell our parent that setup is done and the new main DRb URI.
-        Marshal.dump(proxy.uri, pipe)
+        Marshal.dump(controller.uri, pipe)
       rescue => e
         # Something went wrong, also tell our parent.
         Marshal.dump(e, pipe)
+        raise
       ensure
         pipe.close
       end
 
       def loop!
-        # If the mutex wasn't created, something went south and we do
-        # not want to let the main thread enter sleep mode.
-        if @m
-
-          # Sleep to keep the DRb service running, until woken up.
-          @m.synchronize do
-            @c.wait(@m)
-          end
-
+        # Sleep to keep the DRb service running, until woken up.
+        @m.synchronize do
+          @c.wait(@m)
         end
       end
 
       def stop!
-        Thread.new do
-          # Wait for DRb answer package to be sent.
-          sleep 0.2
-
-          # End main thread -> exit.
-          @m.synchronize do
-            @c.signal
-          end
+        # End main thread -> exit.
+        @m.synchronize do
+          @c.signal
         end
       end
     end

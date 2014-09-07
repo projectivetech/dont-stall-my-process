@@ -6,17 +6,37 @@ module DontStallMyProcess
 
     # LocalProxy connects to an instance of a class on a child process
     # and watches the execution of remote procedure calls.
+    # Furthermore, it takes care of automatically ending the remote DRb
+    # service when the proxy object gets garbage-collected.
     class LocalProxy
+      def self.register_remote_proxy(proxy_uri, proxy)
+        @proxies ||= {}
+        @proxies[proxy_uri] = proxy
+      end
+
+      def self.stop_remote_proxy(proxy_uri)
+        @proxies[proxy_uri].stop! rescue nil
+      end
+
+      def self.stop_remote_proxy_proc(proxy_uri)
+        # http://www.mikeperham.com/2010/02/24/the-trouble-with-ruby-finalizers/
+        proc { LocalProxy.stop_remote_proxy(proxy_uri) }
+      end
+
       def initialize(uri, process, opts)
         @process      = process
         @opts         = opts
 
         # Get a DRb reference to the remote class.
-        @object  = DRbObject.new_with_uri(uri)
+        @proxy       = DRbObject.new_with_uri(uri)
+
+        # Stop the remote DRb service on GC.
+        LocalProxy.register_remote_proxy(uri, @proxy)
+        ObjectSpace.define_finalizer(self, self.class.stop_remote_proxy_proc(uri))
       end
 
       def respond_to?(m, ia = false)
-        @opts[:methods].keys.include?(m) || @object.respond_to?(m, ia) || super(m, ia)
+        @opts[:methods].keys.include?(m) || @proxy.respond_to?(m, ia) || super(m, ia)
       end
 
       def method_missing(meth, *args, &block)
@@ -27,7 +47,7 @@ module DontStallMyProcess
             'are not supported at the moment. Please consider adding an alias to your function.'
         when @opts[:methods].keys.include?(meth)
           __create_nested_proxy(meth, *args, &block)
-        when @object.respond_to?(meth)
+        when @proxy.respond_to?(meth)
           __delegate_with_timeout(meth, *args, &block)
         else
           super
@@ -38,7 +58,7 @@ module DontStallMyProcess
 
       def __create_nested_proxy(meth, *args, &block)
         # Get the DRb URI from the remote.
-        uri = __timed(meth) { @object.public_send(meth, *args, &block) }
+        uri = __timed(meth) { @proxy.public_send(meth, *args, &block) }
 
         # Create a new local proxy and return that.
         # Note: We do not need to cache these here, as there can be multiple
@@ -48,7 +68,7 @@ module DontStallMyProcess
 
       def __delegate_with_timeout(meth, *args, &block)
         __timed(meth) do
-          @object.public_send(meth, *args, &block)
+          @proxy.public_send(meth, *args, &block)
         end
       end
 
@@ -57,52 +77,8 @@ module DontStallMyProcess
           yield
         end
       rescue Timeout::Error
-        __kill_child_process!
+        @process.terminate
         fail TimeoutExceeded, "Method #{meth} took more than #{@opts[:timeout]} seconds to process! Child process killed."
-      end
-
-      def __kill_child_process!
-        unless Configuration.sigkill_only
-          @process.term
-          sleep 5
-        end
-
-        @process.kill if @process.alive?
-      end
-    end
-
-    # MainLocalProxy encapsulates the main DRb client, i.e. the top-level
-    # client class requested by the user. It takes care of initially starting
-    # the DRb service for callbacks and cleaning up child processes on
-    # garbage collection.
-    class MainLocalProxy < LocalProxy
-      def self.register_remote_proxy(main_uri, object)
-        @objects ||= {}
-        @objects[main_uri] = object
-      end
-
-      def self.stop_remote_application(main_uri)
-        @objects[main_uri].stop! rescue nil
-      end
-
-      def self.stop_remote_application_proc(main_uri)
-        # See also: http://www.mikeperham.com/2010/02/24/the-trouble-with-ruby-finalizers/
-        proc { MainLocalProxy.stop_remote_application(main_uri) }
-      end
-
-      def initialize(process, opts)
-        # Start a local DRbServer (unnamed?) for callbacks (blocks!).
-        # Each new Watchdog will overwrite the main master DRbServer.
-        # This looks weird, but doesn't affect concurrent uses of multiple
-        # Watchdogs, I tested it. Trust me.
-        DRb.start_service
-
-        # Initialize the base class, connect to the DRb service or the main client class.
-        super(process.main_uri, process, opts)
-
-        # Stop the child process on GC.
-        MainLocalProxy.register_remote_proxy(process.main_uri, @object)
-        ObjectSpace.define_finalizer(self, self.class.stop_remote_application_proc(process.main_uri))
       end
     end
   end

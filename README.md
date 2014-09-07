@@ -39,10 +39,9 @@ the value of the parent configuration will be used.
 
 <strong>Nested DRb services will run in the same child process.</strong>
 
-<strong>Only one instance of nested classes will be created, i.e., the remote method will only be called once!</strong>
+<strong>Only one instance of nested classes will be created, i.e., the remote method will only be called once! However, if an instance is garbage-collected, or you have manually called the `stop_service!` method, the remote method will be called again.</strong>
 
-If you want to end the subprocess manually, simply call `obj.stop!` on your proxy object. It will
-be done automatically when the object is garbage collected.
+Subprocess will be ended automatically after all proxy objects have been garbage-collected or manually disconnected by calling `stop_service!`.
 
 ## Global configuration
 
@@ -50,7 +49,7 @@ be done automatically when the object is garbage collected.
 DontStallMyProcess.configure do |config|
   config.sigkill_only = false
   config.close_stdio = true
-  config.subprocess_name = 'DontStallMyProcess %{klass}'
+  config.subprocess_name = 'DontStallMyProcess'
   config.after_fork do |pid|
     <...>
   end
@@ -62,9 +61,8 @@ the `TERM` signal to do some shutdown logic on their own. `sigkill_only` default
 
 The `close_stdio` flag causes the subprocess to close `$stdout` and `$stderr` after the fork. Defaults to `true`.
 
-The `subprocess_name` string is the name of the subprocess. When set, the string is interpolated using the
-class name. Defaults to `nil` which means the subprocess is not renamed at all, but instead keeps the name of
-the parent process.
+The `subprocess_name` string is the name of the subprocess. Defaults to `nil` which means the subprocess is
+ not renamed at all, but instead keeps the name of the parent process.
 
 The `after_fork` method of the configuration object may be used to register a `Proc` that is called right
 when the subprocess has been spawned. This is useful for overwriting signal traps, or closing file descriptors
