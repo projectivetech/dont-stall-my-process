@@ -22,7 +22,7 @@ module DontStallMyProcess
         # went wrong.
         if ctrl_uri.is_a?(Exception)
           e = SubprocessInitializationFailed.new(ctrl_uri)
-          e.set_backtrace(@ctrl_uri.backtrace)
+          e.set_backtrace(ctrl_uri.backtrace)
           raise e
         end
 

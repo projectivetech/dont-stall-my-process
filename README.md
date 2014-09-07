@@ -67,8 +67,7 @@ When the `restore_all_traps` flag is set, all signal handlers will be reset to t
 
 When `process_pool_size` is set to a value > 0, that number of processes will be kept alive and be re-used when all their DRb services have been terminated (i.e. all local proxies have been garbage-collected). Defaults to `nil` (same as zero) which turns off process pooling.
 
-The `subprocess_name` string is the name of the subprocess. Defaults to `nil` which means the subprocess is
- not renamed at all, but instead keeps the name of the parent process.
+The `subprocess_name` string is the name of the subprocess. The string `%{parent}` will be interpolated to the parent process' name, the string `%{klass}` with the name of the main class to be contained, or `<pool` if the process remains in the pool and does not serve any class. Defaults to `nil` which means the subprocess is not renamed at all, but instead keeps the name of the parent process.
 
 The `after_fork` method of the configuration object may be used to register a `Proc` that is called right
 when the subprocess has been spawned. This is useful for overwriting signal traps, or closing file descriptors

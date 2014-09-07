@@ -9,16 +9,22 @@ module DontStallMyProcess
     # Furthermore, it takes care of automatically ending the remote DRb
     # service when the proxy object gets garbage-collected.
     class LocalProxy
-      def self.register_remote_proxy(process, proxy_uri, proxy)
+      def self.register_local_proxy(process, proxy_uri, proxy)
         process.local_proxy_instantiated(proxy_uri)
 
         @proxies ||= {}
         @proxies[proxy_uri] = proxy
       end
 
+      def self.lookup_local_proxy(proxy_uri)
+        @proxies ||= {}
+        @proxies[proxy_uri]
+      end
+
       def self.stop_remote_proxy(proxy_uri)
         # We rescue the exception here in case the subprocess is already dead.
         @proxies[proxy_uri].stop_service! rescue nil
+        @proxies.delete(proxy_uri)
 
         process.local_proxy_finalized(proxy_uri)
       end
@@ -36,7 +42,7 @@ module DontStallMyProcess
         @proxy       = DRbObject.new_with_uri(uri)
 
         # Stop the remote DRb service on GC.
-        LocalProxy.register_remote_proxy(process, uri, @proxy)
+        LocalProxy.register_local_proxy(process, uri, @proxy)
         ObjectSpace.define_finalizer(self, self.class.stop_remote_proxy_proc(process, uri))
       end
 
@@ -68,7 +74,7 @@ module DontStallMyProcess
         # Create a new local proxy and return that.
         # Note: We do not need to cache these here, as there can be multiple
         # clients to a single DRb service.
-        LocalProxy.new(uri, @process, @opts[:methods][meth])
+        LocalProxy.lookup_local_proxy(uri) || LocalProxy.new(uri, @process, @opts[:methods][meth])
       end
 
       def __delegate_with_timeout(meth, *args, &block)

@@ -7,8 +7,18 @@ module DontStallMyProcess
     # RemoteProxy is an decorator class for any of the 'real' classes
     # to be served via DRb. It delegates method calls to the encapsulated
     # instance of the 'real' class. Furthermore, it takes care of creating
-    # nested DRb services as requested in the option hash.
+    # and caching nested DRb services as requested in the option hash.
     class RemoteProxy
+      def self.register_remote_proxy(uri)
+        @proxies ||= []
+        @proxies << uri
+      end
+
+      def self.unregister_remote_proxy(uri)
+        @proxies.delete(uri)
+        RemoteApplication.update_process_name if @proxies.empty?
+      end
+
       attr_reader :uri
 
       def initialize(opts, instance, parent = nil)
@@ -18,11 +28,14 @@ module DontStallMyProcess
         @children = {}
 
         @uri      = "drbunix:///tmp/dsmp-#{SecureRandom.hex(8)}"
-        @server   = DRb.start_service(uri, instance)
+        @server   = DRb.start_service(@uri, self)
+
+        RemoteProxy.register_remote_proxy(@uri)
       end
 
       def stop_service!
         DRb.remove_service(@server)
+        RemoteProxy.unregister_remote_proxy(@uri)
         parent.__nested_proxy_stopped!(@uri) if parent
       end
 

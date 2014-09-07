@@ -4,10 +4,13 @@ module DontStallMyProcess
     # RemoteObject is the base 'application' class for the child process.
     # It starts the DRb service and goes to sleep.
     class RemoteApplication
-      def initialize(pipe)
-        # Set subprocess name if requested.
-        $0 = Configuration.subprocess_name if Configuration.subprocess_name
+      def self.update_process_name(klass_name = '<pool>')
+        if Configuration.subprocess_name
+          $0 = Configuration.subprocess_name % { klass: klass_name.to_s }
+        end
+      end
 
+      def initialize(pipe)
         # Do not write to stdout/stderr unless requested by the client.
         if Configuration.close_stdio
           $stdout.reopen('/dev/null', 'w')
@@ -22,6 +25,9 @@ module DontStallMyProcess
         # Call the after_block_handler early, before DRb setup (i.e. before anything
         # can go wrong).
         Configuration.after_fork_handler.call
+
+        # Set the process title.
+        RemoteApplication.update_process_name
 
         # Start our controller class, expose via DRb.
         controller = RemoteApplicationController.new(self)
