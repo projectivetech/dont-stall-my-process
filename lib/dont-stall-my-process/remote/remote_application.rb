@@ -23,6 +23,14 @@ module DontStallMyProcess
           Signal.list.keys.each { |sig| Signal.trap(sig, 'DEFAULT') rescue nil }
         end
 
+        if Configuration.skip_at_exit_handlers
+          # Clearing the Ruby end proc list is not possible without modifying
+          # Ruby itself, see eval_jump.c in current Ruby sources. However,
+          # as these handlers get executed in reverse order, simply calling
+          # exit! here is enough.
+          at_exit { exit! }
+        end
+
         # Call the after_block_handler early, before DRb setup (i.e. before anything
         # can go wrong).
         Configuration.after_fork_handler.call
