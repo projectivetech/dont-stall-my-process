@@ -14,6 +14,11 @@ module DontStallMyProcess
           $stderr.reopen('/dev/null', 'w')
         end
 
+        # Reset signal handlers if requested by client.
+        if Configuration.restore_all_traps
+          Signal.list.keys.each { |sig| Signal.trap(sig, 'DEFAULT') }
+        end
+
         # Call the after_block_handler early, before DRb setup (i.e. before anything
         # can go wrong).
         Configuration.after_fork_handler.call

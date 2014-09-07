@@ -49,6 +49,7 @@ Subprocess will be ended automatically after all proxy objects have been garbage
 DontStallMyProcess.configure do |config|
   config.sigkill_only = false
   config.close_stdio = true
+  config.restore_all_traps = false
   config.subprocess_name = 'DontStallMyProcess'
   config.after_fork do |pid|
     <...>
@@ -60,6 +61,8 @@ no `TERM` signal will be sent. This is useful for some parent processes (e.g., S
 the `TERM` signal to do some shutdown logic on their own. `sigkill_only` defaults to `false`.
 
 The `close_stdio` flag causes the subprocess to close `$stdout` and `$stderr` after the fork. Defaults to `true`.
+
+When the `restore_all_traps` flag is set, all signal handlers will be reset to the Ruby default signal handlers. See documentation on Ruby `Signal` module for more information.
 
 The `subprocess_name` string is the name of the subprocess. Defaults to `nil` which means the subprocess is
  not renamed at all, but instead keeps the name of the parent process.
