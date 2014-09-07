@@ -2,12 +2,15 @@ require 'dont-stall-my-process/local/child_process'
 require 'dont-stall-my-process/local/local_proxy'
 require 'dont-stall-my-process/remote/remote_application'
 require 'dont-stall-my-process/remote/remote_proxy'
+require 'dont-stall-my-process/configuration'
 require 'dont-stall-my-process/version'
 
 module DontStallMyProcess
-  DEFAULT_TIMEOUT = 300
+  def self.configure
+    yield Configuration.get if block_given?
+  end
 
-  def self.create(klass, opts = {}, sigkill_only = false)
+  def self.create(klass, opts = {})
     fail 'no klass given' unless klass && klass.is_a?(Class)
 
     # Set default values and validate configuration.
@@ -17,10 +20,10 @@ module DontStallMyProcess
     p = Local::ChildProcess.new(klass, opts)
 
     # Return the main proxy class.
-    Local::MainLocalProxy.new(p, opts, sigkill_only)
+    Local::MainLocalProxy.new(p, opts)
   end
 
-  def self.sanitize_options(opts, default_timeout = DEFAULT_TIMEOUT)
+  def self.sanitize_options(opts, default_timeout = Configuration::DEFAULT_TIMEOUT)
     fail 'opts is not a hash' unless opts.is_a?(Hash)
 
     opts[:timeout] ||= default_timeout
@@ -39,10 +42,14 @@ module DontStallMyProcess
   end
 
   # This exception is raised when the watchdog bites.
-  class TimeoutExceeded < StandardError; end
+  TimeoutExceeded = Class.new(StandardError)
+
+  # This exception is raised when the subprocess could not be created, or
+  # its initialization failed.
+  SubprocessInitializationFailed = Class.new(StandardError)
 
   # This exception is raised when a forbidden Kernel method is called.
   # These methods do not get forwarded over the DRb.
-  class KernelMethodCalled < StandardError; end
+  KernelMethodCalled = Class.new(StandardError)
 
 end

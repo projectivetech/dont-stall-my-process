@@ -11,19 +11,21 @@ module DontStallMyProcess
         r, w = IO.pipe
         @pid = fork do
           r.close
-          $stdin.close rescue nil
-          $stdout.reopen('/dev/null', 'w')
-          $stderr.reopen('/dev/null', 'w')
           DontStallMyProcess::Remote::RemoteApplication.new(klass, opts, w).loop!
         end
         w.close
 
         # Wait for the RemoteApplication to finish its setup.
-        @main_uri = Marshal.load(r.gets)
-        r.close
+        @main_uri = Marshal.load(r)
 
         # RemoteApplication sends us the DRb URI or an Exception.
-        raise @main_uri if @main_uri.is_a?(Exception)
+        raise SubprocessInitializationFailed.new(@main_uri) if @main_uri.is_a?(Exception)
+
+        # We do not ever want to wait for the subprocess to exit.
+        # (This is the sort of the whole point of this gem...)
+        Process.detach(@pid)
+      ensure
+        r.close
       end
 
       def term
@@ -31,16 +33,8 @@ module DontStallMyProcess
         Process.kill('TERM', @pid) rescue nil
       end
 
-      def detach
-        Process.detach(@pid) rescue nil
-      end
-
       def kill
         Process.kill('KILL', @pid) rescue nil
-      end
-
-      def wait
-        Process.wait(@pid) rescue nil
       end
 
       def alive?

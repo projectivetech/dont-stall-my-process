@@ -10,7 +10,7 @@ exceeded, the subprocess is terminated (and killed if necessary).
 ## Usage
 
 ```
-obj = DontStallMyProcess.create <klass> [, <configuration> [, sigkill_only = false]]
+obj = DontStallMyProcess.create <klass> [, <configuration>]
 ```
 
 where `klass` is a class name and `configuration` looks like this:
@@ -18,7 +18,7 @@ where `klass` is a class name and `configuration` looks like this:
 ```
 {
   timeout: 120      # Seconds for a method of the SomeClass instance to execute.
-  methods: {
+  methods: {        # Hash of methods that should get nested DRb services.
     somemethodname: {
       <description of nested remote object; same way but without :klass...>
     },
@@ -32,10 +32,6 @@ seconds have passed, the child process along with all of its DRb providers will 
 killed (TERM-5sec-KILL) and a TimeoutExceeded exception will be thrown. If not given, `:timeout`
 will default to 300 seconds.
 
-If the `sigkill_only` flag is set to true, the dead process will be terminated using `SIGKILL` only, so
-no `TERM` signal will be sent. This is useful for some parent processes (e.g., Sidekiq) that trap
-the `TERM` signal to do some shutdown logic on their own.
-
 Methods not listed in the `:methods` hash will have usual DRb marshall/unmarshall
 behaviour. Methods listed in there will return a DRb proxy as well, and you can pass in
 another nested `:methods` hash there. You may also overwrite the `:timeout` option, if you don't
@@ -47,6 +43,32 @@ the value of the parent configuration will be used.
 
 If you want to end the subprocess manually, simply call `obj.stop!` on your proxy object. It will
 be done automatically when the object is garbage collected.
+
+## Global configuration
+
+```
+DontStallMyProcess.configure do |config|
+  config.sigkill_only = false
+  config.close_stdio = true
+  config.subprocess_name = 'DontStallMyProcess %{klass}'
+  config.after_fork do |pid|
+    <...>
+  end
+end
+
+If the `sigkill_only` flag is set to true, the dead process will be terminated using `SIGKILL` only, so
+no `TERM` signal will be sent. This is useful for some parent processes (e.g., Sidekiq) that trap
+the `TERM` signal to do some shutdown logic on their own. `sigkill_only` defaults to `false`.
+
+The `close_stdio` flag causes the subprocess to close `$stdout` and `$stderr` after the fork. Defaults to `true`.
+
+The `subprocess_name` string is the name of the subprocess. When set, the string is interpolated using the
+class name. Defaults to `nil` which means the subprocess is not renamed at all, but instead keeps the name of
+the parent process.
+
+The `after_fork` method of the configuration object may be used to register a `Proc` that is called right
+when the subprocess has been spawned. This is useful for overwriting signal traps, or closing file descriptors
+or the like.
 
 ## Caveats
 

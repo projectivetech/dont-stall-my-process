@@ -5,25 +5,47 @@ module DontStallMyProcess
     # It starts the DRb service and goes to sleep.
     class RemoteApplication
       def initialize(klass, opts, pipe)
-        @m = Mutex.new
-        @c = ConditionVariable.new
+        # Set subprocess name if requested.
+        if Configuration.subprocess_name
+          $0 = Configuration.subprocess_name % { klass: klass.name }
+        end
+
+        # Do not write to stdout/stderr unless requested by the client.
+        if Configuration.close_stdio
+          $stdout.reopen('/dev/null', 'w')
+          $stderr.reopen('/dev/null', 'w')
+        end
+
+        # Call the after_block_handler early, before DRb setup (i.e. before anything
+        # can go wrong).
+        Configuration.after_fork_handler.call
 
         # Start the main DRb service.
         proxy = MainRemoteProxy.new(self, klass, opts)
 
+        # Everything went fine, set up the main process synchronization now.
+        @m = Mutex.new
+        @c = ConditionVariable.new
+
         # Tell our parent that setup is done and the new main DRb URI.
-        pipe.write(Marshal.dump(proxy.uri))
+        Marshal.dump(proxy.uri, pipe)
       rescue => e
         # Something went wrong, also tell our parent.
-        pipe.write(Marshal.dump(e))
+        Marshal.dump(e, pipe)
       ensure
         pipe.close
       end
 
       def loop!
-        # Sleep to keep the DRb service running, until woken up.
-        @m.synchronize do
-          @c.wait(@m)
+        # If the mutex wasn't created, something went south and we do
+        # not want to let the main thread enter sleep mode.
+        if @m
+
+          # Sleep to keep the DRb service running, until woken up.
+          @m.synchronize do
+            @c.wait(@m)
+          end
+
         end
       end
 

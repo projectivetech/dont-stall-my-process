@@ -7,10 +7,9 @@ module DontStallMyProcess
     # LocalProxy connects to an instance of a class on a child process
     # and watches the execution of remote procedure calls.
     class LocalProxy
-      def initialize(uri, process, opts, sigkill_only)
+      def initialize(uri, process, opts)
         @process      = process
         @opts         = opts
-        @sigkill_only = sigkill_only
 
         # Get a DRb reference to the remote class.
         @object  = DRbObject.new_with_uri(uri)
@@ -44,7 +43,7 @@ module DontStallMyProcess
         # Create a new local proxy and return that.
         # Note: We do not need to cache these here, as there can be multiple
         # clients to a single DRb service.
-        LocalProxy.new(uri, @process, @opts[:methods][meth], @sigkill_only)
+        LocalProxy.new(uri, @process, @opts[:methods][meth])
       end
 
       def __delegate_with_timeout(meth, *args, &block)
@@ -63,13 +62,11 @@ module DontStallMyProcess
       end
 
       def __kill_child_process!
-        unless @sigkill_only
-          Sidekiq.logger.info "TERMINATIIIING"
+        unless Configuration.sigkill_only
           @process.term
           sleep 5
         end
 
-        @process.detach
         @process.kill if @process.alive?
       end
     end
@@ -86,7 +83,6 @@ module DontStallMyProcess
 
       def self.stop_remote_application(main_uri)
         @objects[main_uri].stop! rescue nil
-        @process.wait
       end
 
       def self.stop_remote_application_proc(main_uri)
@@ -94,7 +90,7 @@ module DontStallMyProcess
         proc { MainLocalProxy.stop_remote_application(main_uri) }
       end
 
-      def initialize(process, opts, sigkill_only)
+      def initialize(process, opts)
         # Start a local DRbServer (unnamed?) for callbacks (blocks!).
         # Each new Watchdog will overwrite the main master DRbServer.
         # This looks weird, but doesn't affect concurrent uses of multiple
@@ -102,7 +98,7 @@ module DontStallMyProcess
         DRb.start_service
 
         # Initialize the base class, connect to the DRb service or the main client class.
-        super(process.main_uri, process, opts, sigkill_only)
+        super(process.main_uri, process, opts)
 
         # Stop the child process on GC.
         MainLocalProxy.register_remote_proxy(process.main_uri, @object)
