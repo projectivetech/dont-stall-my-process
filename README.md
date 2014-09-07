@@ -41,7 +41,7 @@ the value of the parent configuration will be used.
 
 <strong>Only one instance of nested classes will be created, i.e., the remote method will only be called once! However, if an instance is garbage-collected, or you have manually called the `stop_service!` method, the remote method will be called again.</strong>
 
-Subprocess will be ended automatically after all proxy objects have been garbage-collected or manually disconnected by calling `stop_service!`.
+Subprocess will be ended automatically after all proxy objects have been garbage-collected or manually disconnected by calling `stop_service!`. If you pass a `true` parameter, nested proxies will be terminated, too. Make sure to not use these objects afterwards.
 
 ## Global configuration
 

@@ -33,10 +33,14 @@ module DontStallMyProcess
         RemoteProxy.register_remote_proxy(@uri)
       end
 
-      def stop_service!
+      def stop_service!(include_nested = false)
         DRb.remove_service(@server)
         RemoteProxy.unregister_remote_proxy(@uri)
         parent.__nested_proxy_stopped!(@uri) if parent
+
+        if(include_nested)
+          @children.each_value { |proxy| proxy.stop_service!(true) }
+        end
       end
 
       def respond_to?(m, ia = false)
