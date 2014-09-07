@@ -19,7 +19,8 @@ module DontStallMyProcess
 
         # Reset signal handlers if requested by client.
         if Configuration.restore_all_traps
-          Signal.list.keys.each { |sig| Signal.trap(sig, 'DEFAULT') }
+          # Plenty of signals are not trappable, simply ignore this here.
+          Signal.list.keys.each { |sig| Signal.trap(sig, 'DEFAULT') rescue nil }
         end
 
         # Call the after_block_handler early, before DRb setup (i.e. before anything
