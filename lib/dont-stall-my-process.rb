@@ -1,11 +1,12 @@
+require 'dont-stall-my-process/configuration'
+require 'dont-stall-my-process/proxy_registry'
+require 'dont-stall-my-process/version'
 require 'dont-stall-my-process/local/child_process'
 require 'dont-stall-my-process/local/child_process_pool'
 require 'dont-stall-my-process/local/local_proxy'
 require 'dont-stall-my-process/remote/remote_application'
 require 'dont-stall-my-process/remote/remote_application_controller'
 require 'dont-stall-my-process/remote/remote_proxy'
-require 'dont-stall-my-process/configuration'
-require 'dont-stall-my-process/version'
 
 module DontStallMyProcess
   def self.configure
@@ -27,8 +28,17 @@ module DontStallMyProcess
     # Fork the child process.
     process = Local::ChildProcessPool.alloc
 
-    # Start the DRb service for the main class, and return the proxy.
-    process.start_service(klass, opts)
+    # Start the DRb service for the main class and create a proxy.
+    proxy = process.start_service(klass, opts)
+
+    # If a block is given, we finalize the service immediately after its return.
+    if block_given?
+      yield proxy
+      proxy.stop_service!
+      proxy = nil
+    end
+    
+    proxy
   end
 
   def self.sanitize_options(opts, default_timeout = Configuration::DEFAULT_TIMEOUT)

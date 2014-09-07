@@ -4,11 +4,19 @@ module DontStallMyProcess
     # The ChildProcess class encapsulates the forked subprocess that
     # provides the DRb service object.
     class ChildProcess
+      attr_reader :pid
+
       def initialize
         # Start RemoteApplication in child process, connect to it thru pipe.
         r, w = IO.pipe
         @pid = fork do
           r.close
+
+          # Clear the ChildProcessPool class memory, otherwise killing the
+          # subprocess (when Configuration.skip_at_exit_handlers is false) will
+          # terminate all the other subprocesses.
+          ChildProcessPool.disable_at_exit
+
           app = DontStallMyProcess::Remote::RemoteApplication.new(w)
           app.loop!
         end
@@ -29,21 +37,17 @@ module DontStallMyProcess
         # Connect to and store the controller DRb client.
         @controller = DRbObject.new_with_uri(ctrl_uri)
 
-        # We do not ever want to wait for the subprocess to exit.
-        # (This is the sort of the whole point of this gem...)
-        Process.detach(@pid)
+        # Setup LocalProxy registry for this pid.
+        LocalProxy.setup_proxy_registry(@pid) do
+          # This block will be called when all LocalProxies
+          # of this pid are gone (either garbage-collected or
+          # manually destroyed by 'stop_service!').
+
+          # Hand back ourself to the ChildProcessPool to get new jobs.
+          ChildProcessPool.free(self)
+        end
       ensure
         r.close
-      end
-
-      def local_proxy_instantiated(uri)
-        @proxies ||= []
-        @proxies << uri
-      end
-
-      def local_proxy_finalized(uri)
-        @proxies.delete(uri)
-        ChildProcessPool.free(self) if @proxies.empty?
       end
 
       def start_service(klass, opts)
@@ -54,18 +58,23 @@ module DontStallMyProcess
       end
 
       def quit
-        @controller.stop_application
+        @controller.stop_application rescue nil
         @controller = nil
+        sleep 0.5
+        terminate(false, 0.5)
       end
 
-      def terminate
+      def terminate(sigkill = true, term_sleep = 5)
         unless Configuration.sigkill_only
           Process.kill('TERM', @pid)
-          sleep 5
+          sleep term_sleep
         end
 
         # http://stackoverflow.com/questions/325082/how-can-i-check-from-ruby-whether-a-process-with-a-certain-pid-is-running
-        Process.kill('KILL', @pid) if Process.waitpid(@pid, Process::WNOHANG).nil?
+        Process.kill('KILL', @pid) if sigkill && Process.waitpid(@pid, Process::WNOHANG).nil?
+
+        # Collect process status to not have a zombie hanging around.
+        Process.wait(@pid)
       rescue
         # Exceptions in these Process.* methods almost always mean the process is already dead.
         nil

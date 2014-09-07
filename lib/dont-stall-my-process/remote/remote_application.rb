@@ -35,8 +35,17 @@ module DontStallMyProcess
         # can go wrong).
         Configuration.after_fork_handler.call
 
-        # Set the process title.
+        # Initially display the process name without a class name (-> '<pool>').
         RemoteApplication.update_process_name
+
+        RemoteProxy.setup_proxy_registry(Process.pid) do
+          # This block is called when all RemoteProxies have closed there
+          # DRb servers. We're now idling again, waiting for new jobs in the
+          # pool *or* are going to be be terminated in a second.
+
+          # Update process name again to indicate availability.
+          RemoteApplication.update_process_name
+        end
 
         # Start our controller class, expose via DRb.
         controller = RemoteApplicationController.new(self)
@@ -60,6 +69,11 @@ module DontStallMyProcess
         @m.synchronize do
           @c.wait(@m)
         end
+
+        # Remote application end.
+        exit 0
+      rescue SystemExit, Interrupt
+        raise
       end
 
       def stop!

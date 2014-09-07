@@ -7,16 +7,10 @@ module DontStallMyProcess
     # RemoteProxy is an decorator class for any of the 'real' classes
     # to be served via DRb. It delegates method calls to the encapsulated
     # instance of the 'real' class. Furthermore, it takes care of creating
-    # and caching nested DRb services as requested in the option hash.
+    # nested DRb services as requested in the option hash.
     class RemoteProxy
-      def self.register_remote_proxy(uri)
-        @proxies ||= []
-        @proxies << uri
-      end
-
-      def self.unregister_remote_proxy(uri)
-        @proxies.delete(uri)
-        RemoteApplication.update_process_name if @proxies.empty?
+      class << self
+        include DontStallMyProcess::ProxyRegistry
       end
 
       attr_reader :uri
@@ -24,23 +18,15 @@ module DontStallMyProcess
       def initialize(opts, instance, parent = nil)
         @opts     = opts
         @object   = instance
-        @parent   = parent
-        @children = {}
 
         @uri      = "drbunix:///tmp/dsmp-#{SecureRandom.hex(8)}"
         @server   = DRb.start_service(@uri, self)
 
-        RemoteProxy.register_remote_proxy(@uri)
+        RemoteProxy.register(Process.pid, @uri, self)
       end
 
-      def stop_service!(include_nested = false)
-        @server.stop_service
-        RemoteProxy.unregister_remote_proxy(@uri)
-        @parent.__nested_proxy_stopped!(@uri) if @parent
-
-        if(include_nested)
-          @children.each_value { |proxy| proxy.stop_service!(true) }
-        end
+      def __local_proxy_destroyed
+        __destroy
       end
 
       def respond_to?(m, ia = false)
@@ -62,21 +48,16 @@ module DontStallMyProcess
     private
 
       def __create_nested_proxy(meth, *args, &block)
-        # Create a new DRb proxy if needed, and save its URI.
-        unless @children[meth]
-          # Call the object method now, save the returned object.
-          instance = @object.public_send(meth, *args, &block)
+        instance = @object.public_send(meth, *args, &block)
 
-          # Start the proxy, convert the object 0into a DRb service.
-          @children[meth] = RemoteProxy.new(@opts[:methods][meth], instance, self).uri
-        end
-
-        # Return the DRb URI.
-        @children[meth]
+        # Start the proxy, convert the object into a DRb service.
+        RemoteProxy.new(@opts[:methods][meth], instance, self).uri
       end
 
-      def __nested_proxy_stopped(uri)
-        @children.delete_if { |_, child_uri| child_uri == uri }
+      def __destroy
+        @server.stop_service
+
+        RemoteProxy.unregister(Process.pid, @uri)
       end
     end
   end
