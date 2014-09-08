@@ -46,6 +46,10 @@ module DontStallMyProcess
           @application.stop!
         end
       end
+
+      def alive?
+        true
+      end
     end
   end
 end

@@ -60,7 +60,7 @@ module DontStallMyProcess
       end
 
       def alive?
-        @alive
+        @alive && @controller.alive? rescue false
       end
 
       def quit

@@ -1,16 +1,28 @@
 module DontStallMyProcess
   module Local
     class ChildProcessPool
+      MAX_ALLOC_TRIES = 5
       SEMAPHORE = Mutex.new
 
       def self.alloc
-        SEMAPHORE.synchronize do
-          if !@pool || @pool.empty?
-            ChildProcess.new
-          else
-            @pool.shift
+        process = nil
+        tries   = MAX_ALLOC_TRIES
+        until (process && process.alive?) || tries == 0
+          tries -= 1
+          SEMAPHORE.synchronize do
+            if !@pool || @pool.empty?
+              process = ChildProcess.new
+            else
+              process = @pool.shift
+            end
           end
         end
+
+        unless process && process.alive?
+          fail SubprocessInitializationFailed, "failed to allocated subprocess (tried #{MAX_ALLOC_TRIES} times)"
+        end
+
+        process
       end
 
       def self.free(process)
