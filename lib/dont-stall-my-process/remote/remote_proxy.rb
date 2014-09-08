@@ -1,3 +1,4 @@
+require 'fileutils'
 require 'drb'
 require 'securerandom'
 
@@ -56,6 +57,7 @@ module DontStallMyProcess
 
       def __destroy
         @server.stop_service
+        FileUtils.rm_f(@uri)
 
         RemoteProxy.unregister(Process.pid, @uri)
       end

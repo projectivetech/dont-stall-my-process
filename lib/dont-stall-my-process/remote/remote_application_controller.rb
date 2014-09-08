@@ -1,3 +1,4 @@
+require 'fileutils'
 require 'drb'
 
 module DontStallMyProcess
@@ -36,6 +37,7 @@ module DontStallMyProcess
 
           # Kill our own DRb server.
           @server.stop_service
+          FileUtils.rm_f(@uri)
 
           # Let DRb resolve its pthread mutexes and stuff.
           sleep 0.2
