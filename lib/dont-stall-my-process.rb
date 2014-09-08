@@ -21,12 +21,6 @@ module DontStallMyProcess
     # Set default values and validate configuration.
     opts = sanitize_options(opts)
 
-    # Start a local DRbServer (unnamed?) for callbacks (blocks!).
-    # Each new DontStallMyProcess object will overwrite the main master DRbServer.
-    # This looks weird, but doesn't affect concurrent uses of multiple
-    # Watchdogs, I tested it. Trust me.
-    DRb.start_service
-
     # Fork the child process.
     process = Local::ChildProcessPool.alloc
 
@@ -62,4 +56,7 @@ module DontStallMyProcess
       ]
     }
   end
+
+  # Start a local DRbServer (unnamed?) for callbacks (blocks!).
+  DRb.start_service
 end
