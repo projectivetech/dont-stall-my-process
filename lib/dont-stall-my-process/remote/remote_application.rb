@@ -48,14 +48,14 @@ module DontStallMyProcess
         end
 
         # Start our controller class, expose via DRb.
-        controller = RemoteApplicationController.new(self)
+        @controller = RemoteApplicationController.new(self)
 
         # Everything went fine, set up the main process synchronization now.
         @m = Mutex.new
         @c = ConditionVariable.new
 
         # Tell our parent that setup is done and the new main DRb URI.
-        Marshal.dump(controller.uri, pipe)
+        Marshal.dump(@controller.uri, pipe)
       rescue => e
         # Something went wrong, also tell our parent.
         Marshal.dump(e, pipe)

@@ -17,13 +17,13 @@ module DontStallMyProcess
         instance = klass.new
 
         # Start the main DRb service.
-        proxy = RemoteProxy.new(opts, instance)
+        @proxy = RemoteProxy.new(opts, instance)
 
         # Set subprocess name if requested.
         RemoteApplication.update_process_name(klass.name.to_s)
 
         # Return the DRb URI.
-        proxy.uri
+        @proxy.uri
       end
 
       def stop_application

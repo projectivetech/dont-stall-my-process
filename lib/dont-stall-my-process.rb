@@ -34,7 +34,9 @@ module DontStallMyProcess
 
     # If a block is given, we finalize the service immediately after its return.
     if block_given?
+
       yield proxy
+
       proxy.stop_service!
       proxy = nil
     end

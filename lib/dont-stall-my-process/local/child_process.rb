@@ -46,6 +46,8 @@ module DontStallMyProcess
           # Hand back ourself to the ChildProcessPool to get new jobs.
           ChildProcessPool.free(self)
         end
+
+        @alive = true
       ensure
         r.close
       end
@@ -55,6 +57,10 @@ module DontStallMyProcess
         
         # Create the main proxy class.
         Local::LocalProxy.new(uri, self, opts)
+      end
+
+      def alive?
+        @alive
       end
 
       def quit
@@ -75,6 +81,9 @@ module DontStallMyProcess
 
         # Collect process status to not have a zombie hanging around.
         Process.wait(@pid)
+
+        # Do not reuse this process ever again.
+        @alive = false
       rescue
         # Exceptions in these Process.* methods almost always mean the process is already dead.
         nil
