@@ -20,7 +20,7 @@ module DontStallMyProcess
         @opts     = opts
         @object   = instance
 
-        @uri      = "drbunix:///tmp/dsmp-#{SecureRandom.hex(8)}"
+        @uri      = "drbunix:///tmp/dsmp-#{Process.ppid}-#{SecureRandom.hex(8)}"
         @server   = DRb.start_service(@uri, self)
 
         RemoteProxy.register(Process.pid, @uri, self)

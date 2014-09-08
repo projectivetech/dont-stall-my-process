@@ -9,7 +9,7 @@ module DontStallMyProcess
       def initialize(application)
         @applicarion = application
 
-        @uri         = "drbunix:///tmp/dsmp-controller-#{Process.pid}"
+        @uri         = "drbunix:///tmp/dsmp-#{Process.ppid}-controller-#{Process.pid}"
         @server      = DRb.start_service(uri, self)
       end
 
