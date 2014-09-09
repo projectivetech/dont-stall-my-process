@@ -11,12 +11,6 @@ module DontStallMyProcess
       end
 
       def initialize(pipe)
-        # Disable process cleanup, otherwise killing the
-        # subprocess (when Configuration.skip_at_exit_handlers is false) will
-        # terminate all the other subprocesses, or at least screw with their
-        # unix sockets.
-        ProcessExitHandler.disable_at_exit
-
         # Do not write to stdout/stderr unless requested by the client.
         if Configuration.close_stdio
           $stdout.reopen('/dev/null', 'w')

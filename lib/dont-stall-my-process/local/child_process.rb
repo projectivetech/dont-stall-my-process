@@ -17,6 +17,12 @@ module DontStallMyProcess
         @pid = fork do
           r.close
 
+          # Disable process cleanup, otherwise killing the
+          # subprocess (when Configuration.skip_at_exit_handlers is false) will
+          # terminate all the other subprocesses, or at least screw with their
+          # unix sockets.
+          ProcessExitHandler.disable_at_exit
+
           app = DontStallMyProcess::Remote::RemoteApplication.new(w)
           app.loop!
         end
