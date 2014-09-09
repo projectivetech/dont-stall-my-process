@@ -7,16 +7,15 @@ module DontStallMyProcess
       attr_reader :pid
 
       def initialize
-        # Start RemoteApplication in child process, connect to it thru pipe.
         r, w = IO.pipe
+
+        # Call the before_fork handler now, so the client can clean up the main
+        # process a bit.
+        Configuration.before_fork_handler.call
+
+        # Start RemoteApplication in child process, connect to it thru pipe.
         @pid = fork do
           r.close
-
-          # Disable process cleanup, otherwise killing the
-          # subprocess (when Configuration.skip_at_exit_handlers is false) will
-          # terminate all the other subprocesses, or at least screw with their
-          # unix sockets.
-          ProcessExitHandler.disable_at_exit
 
           app = DontStallMyProcess::Remote::RemoteApplication.new(w)
           app.loop!
